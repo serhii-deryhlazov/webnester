@@ -60,11 +60,18 @@ sudo nginx -t
 # Start/reload nginx
 if [ "$SERVICE_MANAGER" = "rc-service" ]; then
     # Alpine Linux
-    sudo rc-service nginx start
-    sudo rc-service nginx reload
+    if sudo rc-service nginx status | grep -q "started"; then
+        sudo rc-service nginx reload
+    else
+        sudo rc-service nginx start
+    fi
 else
     # Ubuntu/Debian
-    sudo systemctl reload nginx
+    if sudo systemctl is-active --quiet nginx; then
+        sudo systemctl reload nginx
+    else
+        sudo systemctl start nginx
+    fi
 fi
 
 echo "nginx has been configured with SSL."

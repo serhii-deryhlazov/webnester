@@ -1,11 +1,34 @@
 #!/bin/bash
 
+# Detect the OS and package manager
+if command -v apk &> /dev/null; then
+    # Alpine Linux
+    PACKAGE_MANAGER="apk"
+    SERVICE_MANAGER="rc-service"
+    NGINX_CONF="/etc/nginx/nginx.conf"
+    WEB_ROOT="/var/www/localhost/htdocs"
+elif command -v apt &> /dev/null; then
+    # Ubuntu/Debian
+    PACKAGE_MANAGER="apt"
+    SERVICE_MANAGER="systemctl"
+    NGINX_CONF="/etc/nginx/sites-available/default"
+    WEB_ROOT="/var/www/html"
+else
+    echo "Unsupported OS"
+    exit 1
+fi
+
 # Check if nginx is installed, install if not
 if ! command -v nginx &> /dev/null
 then
     echo "nginx is not installed. Installing nginx..."
-    sudo apt update
-    sudo apt install -y nginx
+    if [ "$PACKAGE_MANAGER" = "apk" ]; then
+        sudo apk update
+        sudo apk add nginx php82 php82-fpm
+    else
+        sudo apt update
+        sudo apt install -y nginx php-fpm
+    fi
 else
     echo "nginx is already installed."
 fi
@@ -18,23 +41,42 @@ sudo mkdir -p $SSL_DIR
 sudo cp ssh/certificate.crt $SSL_DIR/certificate.crt
 sudo cp ssh/private.key $SSL_DIR/private.key
 
-# Backup the default site configuration
-NGINX_DEFAULT="/etc/nginx/sites-available/default"
-sudo cp $NGINX_DEFAULT ${NGINX_DEFAULT}.bak
+# Create web root directory
+sudo mkdir -p $WEB_ROOT
 
 # Configure nginx for SSL
-sudo cp config/nginx-default $NGINX_DEFAULT
+if [ "$PACKAGE_MANAGER" = "apk" ]; then
+    # Alpine Linux - modify main nginx.conf
+    sudo cp config/nginx-default /etc/nginx/http.d/default.conf
+else
+    # Ubuntu/Debian - use sites-available
+    sudo cp $NGINX_CONF ${NGINX_CONF}.bak
+    sudo cp config/nginx-default $NGINX_CONF
+fi
 
 # Test nginx configuration
 sudo nginx -t
 
-# Reload nginx
-sudo systemctl reload nginx
+# Start/reload nginx
+if [ "$SERVICE_MANAGER" = "rc-service" ]; then
+    # Alpine Linux
+    sudo rc-service nginx start
+    sudo rc-service nginx reload
+else
+    # Ubuntu/Debian
+    sudo systemctl reload nginx
+fi
 
 echo "nginx has been configured with SSL."
 
-sudo rm -f /var/www/html/index.html
-sudo cp web/index.php /var/www/html/index.php
+sudo rm -f $WEB_ROOT/index.html
+sudo cp web/index.php $WEB_ROOT/index.php
 
 # Restart nginx to apply changes
-sudo systemctl restart nginx
+if [ "$SERVICE_MANAGER" = "rc-service" ]; then
+    # Alpine Linux
+    sudo rc-service nginx restart
+else
+    # Ubuntu/Debian
+    sudo systemctl restart nginx
+fi

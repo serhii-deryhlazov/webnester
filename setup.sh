@@ -52,6 +52,8 @@ else
     # Ubuntu/Debian - use sites-available
     sudo cp $NGINX_CONF ${NGINX_CONF}.bak
     sudo cp config/nginx-default $NGINX_CONF
+    # Enable the site by creating symlink to sites-enabled
+    sudo ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
 fi
 
 # Test nginx configuration
